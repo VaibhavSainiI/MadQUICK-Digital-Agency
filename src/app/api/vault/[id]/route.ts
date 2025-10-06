@@ -6,9 +6,10 @@ import VaultItem from '@/models/VaultItem';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -24,7 +25,7 @@ export async function PUT(
     await dbConnect();
     
     const vaultItem = await VaultItem.findOneAndUpdate(
-      { _id: params.id, userId: session.user.id },
+      { _id: resolvedParams.id, userId: session.user.id },
       { encryptedData },
       { new: true }
     );
@@ -42,9 +43,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -54,7 +56,7 @@ export async function DELETE(
     await dbConnect();
     
     const vaultItem = await VaultItem.findOneAndDelete({
-      _id: params.id,
+      _id: resolvedParams.id,
       userId: session.user.id,
     });
     
