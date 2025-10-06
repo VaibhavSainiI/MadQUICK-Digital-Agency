@@ -1,18 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-        ],
-      },
-    ];
-  },
+  // This ensures the app works on Vercel
 };
 
-export default nextConfig;
+module.exports = nextConfig;
