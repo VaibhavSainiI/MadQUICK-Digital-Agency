@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Custom scripts and test files
+start-dev.bat
+start-server.ps1
+test-connection.js
+
+# VS Code settings (optional)
+.vscode/
