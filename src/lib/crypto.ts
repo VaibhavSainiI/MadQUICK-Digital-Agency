@@ -11,10 +11,10 @@ export const decrypt = (ciphertext: string): string => {
   return bytes.toString(CryptoJS.enc.Utf8);
 };
 
-export const encryptObject = (obj: any): string => {
+export const encryptObject = (obj: Record<string, unknown>): string => {
   return encrypt(JSON.stringify(obj));
 };
 
-export const decryptObject = (ciphertext: string): any => {
+export const decryptObject = (ciphertext: string): Record<string, unknown> => {
   return JSON.parse(decrypt(ciphertext));
 };
