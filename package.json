@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
-    "export": "next export",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint",
+    "postbuild": "echo 'Build completed successfully'"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

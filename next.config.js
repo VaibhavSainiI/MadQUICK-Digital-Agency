@@ -1,13 +1,26 @@
-/** @type {import('next').NextConfig} */
+﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Basic configuration for Netlify
+  // Production optimizations
   images: {
     unoptimized: true,
+    domains: [],
   },
-  
-  // Ensure compatibility
-  experimental: {
-    serverComponentsExternalPackages: ['mongoose'],
+
+  // External packages for server components
+  serverExternalPackages: ['mongoose'],
+
+  // Environment configuration
+  env: {
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+  },
+
+  // Webpack configuration for compatibility
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+    };
+    return config;
   },
 };
 
