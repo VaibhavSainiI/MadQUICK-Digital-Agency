@@ -29,6 +29,13 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v1
 
+      - name: Debug commit and route file
+        run: |
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          git rev-parse HEAD
+          sed -n '1,80p' "src/app/api/vault/[id]/route.ts"
+          sed -n '1,40p' "src/app/api/auth/[...nextauth]/route.ts"
+
       - name: Build and push image to ECR
         env:
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
@@ -39,7 +46,7 @@ jobs:
           REPO_URI="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO"
 
           aws ecr describe-repositories --repository-names $REPO || aws ecr create-repository --repository-name $REPO
-          docker build -t $REPO:latest .
+          docker build --no-cache -t $REPO:latest .
           docker tag $REPO:latest $REPO_URI:latest
           docker push $REPO_URI:latest
 
