@@ -1,0 +1,89 @@
+name: Build and deploy to AWS ECS (ECR)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: password-vault
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Get ECR repo URI
+        id: ecr
+        run: |
+          REPO=${{ secrets.ECR_REPOSITORY }}
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          URI="$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/$REPO"
+          echo "REPO_URI=$URI" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run: |
+          docker build -t $IMAGE_NAME:latest .
+          docker tag $IMAGE_NAME:latest $REPO_URI:latest
+
+      - name: Push to ECR
+        run: |
+          aws ecr describe-repositories --repository-names ${{ secrets.ECR_REPOSITORY }} || aws ecr create-repository --repository-name ${{ secrets.ECR_REPOSITORY }}
+          docker push $REPO_URI:latest
+
+      - name: Register new ECS task definition
+        env:
+          REPO_URI: ${{ env.REPO_URI }}
+        run: |
+          CLUSTER=${{ secrets.ECS_CLUSTER }}
+          SERVICE=${{ secrets.ECS_SERVICE }}
+          TASK_FAMILY=${{ secrets.ECS_TASK_FAMILY }}
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_URI="$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest"
+
+          # Generate a minimal task definition JSON
+          cat > taskdef.json <<EOF
+          {
+            "family": "$TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "512",
+            "memory": "1024",
+            "executionRoleArn": "${{ secrets.ECS_EXECUTION_ROLE_ARN }}",
+            "containerDefinitions": [
+              {
+                "name": "password-vault",
+                "image": "$IMAGE_URI",
+                "portMappings": [{"containerPort": 3000,"protocol":"tcp"}],
+                "essential": true,
+                "environment": [
+                  {"name":"NODE_ENV","value":"production"},
+                  {"name":"MONGODB_URI","value":"${{ secrets.MONGODB_URI }}"},
+                  {"name":"NEXTAUTH_SECRET","value":"${{ secrets.NEXTAUTH_SECRET }}"},
+                  {"name":"NEXTAUTH_URL","value":"${{ secrets.NEXTAUTH_URL }}"}
+                ]
+              }
+            ]
+          }
+          EOF
+
+          aws ecs register-task-definition --cli-input-json file://taskdef.json > taskdef-out.json
+          NEW_TASK_DEF=$(jq -r '.taskDefinition.taskDefinitionArn' taskdef-out.json)
+          aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASK_DEF || echo "Service update may require an existing service"

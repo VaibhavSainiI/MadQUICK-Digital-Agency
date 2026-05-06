@@ -1,0 +1,70 @@
+name: Build and deploy to AWS App Runner (via ECR)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: password-vault
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push image to ECR
+        env:
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REGION=${{ secrets.AWS_REGION }}
+          REPO=${ECR_REPOSITORY}
+          REPO_URI="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO"
+
+          aws ecr describe-repositories --repository-names $REPO || aws ecr create-repository --repository-name $REPO
+          docker build -t $REPO:latest .
+          docker tag $REPO:latest $REPO_URI:latest
+          docker push $REPO_URI:latest
+
+          echo "REPO_URI=$REPO_URI:latest" >> $GITHUB_ENV
+
+      - name: Create or update App Runner service
+        env:
+          SERVICE_NAME: ${{ secrets.APP_RUNNER_SERVICE_NAME }}
+          REPO_URI: ${{ env.REPO_URI }}
+        run: |
+          REGION=${{ secrets.AWS_REGION }}
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REPO=${{ secrets.ECR_REPOSITORY }}
+          IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO:latest"
+
+          # Check if service exists
+          set +e
+          SRV_ARN=$(aws apprunner list-services --region $REGION --query "ServiceSummaryList[?ServiceName=='${{ secrets.APP_RUNNER_SERVICE_NAME }}'].ServiceArn | [0]" --output text)
+          set -e
+
+          if [ "$SRV_ARN" = "None" ] || [ -z "$SRV_ARN" ]; then
+            echo "Creating App Runner service ${SERVICE_NAME}"
+            aws apprunner create-service --service-name ${SERVICE_NAME} --source-configuration '{"ImageRepository":{"ImageIdentifier":"'"$IMAGE_URI"'","ImageRepositoryType":"ECR","ImageConfiguration":{"Port":"3000"}},"AuthenticationConfiguration":{"AccessRoleArn":null}}' --region $REGION
+          else
+            echo "Starting deployment for existing App Runner service"
+            SERVICE_ARN=$SRV_ARN
+            aws apprunner start-deployment --service-arn $SERVICE_ARN --region $REGION
+          fi

@@ -1,3 +1,0 @@
-# Vercel ignore file
-.env.local
-test-connection.js

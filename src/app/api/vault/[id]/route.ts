@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/db';
 import VaultItem from '@/models/VaultItem';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const resolvedParams = await params;
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -25,7 +24,7 @@ export async function PUT(
     await dbConnect();
     
     const vaultItem = await VaultItem.findOneAndUpdate(
-      { _id: resolvedParams.id, userId: session.user.id },
+      { _id: params.id, userId: session.user.id },
       { encryptedData },
       { new: true }
     );
@@ -43,10 +42,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const resolvedParams = await params;
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -56,7 +54,7 @@ export async function DELETE(
     await dbConnect();
     
     const vaultItem = await VaultItem.findOneAndDelete({
-      _id: resolvedParams.id,
+      _id: params.id,
       userId: session.user.id,
     });
     
